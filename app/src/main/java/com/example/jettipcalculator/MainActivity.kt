@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -47,7 +48,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             TipCalculatorContainer {
-                TipCalculatorContent(amountPerPerson = 133.0)
+                TipCalculatorContent()
             }
         }
     }
@@ -67,12 +68,17 @@ fun TipCalculatorContainer(content: @Composable () -> Unit) {
 }
 
 @Composable
-fun TipCalculatorContent(amountPerPerson: Double) {
+fun TipCalculatorContent() {
+    var amountPerPerson by remember {
+        mutableStateOf(0.0)
+    }
+
     Column(
         verticalArrangement = Arrangement.Top
     ) {
         TopHeader(amountPerPerson = amountPerPerson)
         BillForm() {
+            amountPerPerson = it
             Log.d("", it.toString())
         }
     }
@@ -111,6 +117,25 @@ fun BillForm(
     modifier: Modifier = Modifier,
     onValueChange: (Double) -> Unit = {}
 ) {
+    val totalBillTextState = remember {
+        mutableStateOf("")
+    }
+    val totalBillParsed = totalBillTextState.value.toDoubleOrNull()
+    val totalBill = ((totalBillParsed ?: 0.0) * 100.0).roundToInt().toDouble() / 100.0
+    var peopleCount by remember {
+        mutableStateOf(1)
+    }
+    var sliderPosition by remember {
+        mutableStateOf(0.15f)
+    }
+    val tipPercentage = remember(key1 = sliderPosition) {
+        (sliderPosition * 100).roundToInt()
+    }
+    val tipAmount = remember(key1 = totalBill, key2 = tipPercentage) {
+        (totalBill * tipPercentage.toDouble()).roundToInt().toDouble() / 100.0
+    }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -123,105 +148,99 @@ fun BillForm(
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.Start
         ) {
-            val totalBillTextState = remember {
-                mutableStateOf("")
-            }
-            val totalBill = totalBillTextState.value.toDoubleOrNull()
-            var peopleCount by remember {
-                mutableStateOf(1)
-            }
-            var sliderPosition by remember {
-                mutableStateOf(0.15f)
-            }
-            val tipPercentage = remember(sliderPosition) {
-                (sliderPosition * 100).roundToInt()
-            }
-            val keyboardController = LocalSoftwareKeyboardController.current
-
             InputField(
                 modifier = Modifier.fillMaxWidth(),
                 valueState = totalBillTextState,
                 labelText = "Enter Bill",
                 keyboardActions = KeyboardActions {
-                    if (totalBill == null) return@KeyboardActions
+                    if (totalBillParsed == null) return@KeyboardActions
 
-                    onValueChange(totalBill)
+                    onValueChange(amountPerPerson(totalBill, tipAmount, peopleCount))
                     keyboardController?.hide()
                 }
             )
 
-//            if (totalBill == null) {
-//                Box() {}
-//            } else {
-            Row(
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Split",
-                    modifier = Modifier.align(Alignment.CenterVertically)
-                )
-                Spacer(modifier = Modifier.width(120.dp))
+            if (totalBillParsed == null) {
+                Box() {}
+            } else {
                 Row(
-                    modifier = Modifier.padding(horizontal = 3.dp),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    RoundIconButton(
-                        imageVector = Icons.Default.Remove,
-                        contentDescription = "minus",
-                        onClick = {
-                            if (peopleCount > 1) {
-                                peopleCount--
-                            }
-                        }
-                    )
                     Text(
-                        text = peopleCount.toString(),
-                        modifier = Modifier.padding(9.dp)
+                        text = "Split",
+                        modifier = Modifier.align(Alignment.CenterVertically)
                     )
-                    RoundIconButton(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "plus",
-                        onClick = { peopleCount++ }
+                    Spacer(modifier = Modifier.width(120.dp))
+                    Row(
+                        modifier = Modifier.padding(horizontal = 3.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RoundIconButton(
+                            imageVector = Icons.Default.Remove,
+                            contentDescription = "minus",
+                            onClick = {
+                                if (peopleCount > 1) {
+                                    peopleCount--
+                                }
+                                onValueChange(amountPerPerson(totalBill, tipAmount, peopleCount))
+                            }
+                        )
+                        Text(
+                            text = peopleCount.toString(),
+                            modifier = Modifier.padding(9.dp)
+                        )
+                        RoundIconButton(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "plus",
+                            onClick = {
+                                peopleCount++
+                                onValueChange(amountPerPerson(totalBill, tipAmount, peopleCount))
+                            }
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "Tip")
+                    Spacer(modifier = Modifier.width(200.dp))
+                    Text(text = "$${String.format("%.2f", tipAmount)}")
+                }
+
+                Column(
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(text = "$tipPercentage%")
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Slider(
+                        value = sliderPosition,
+                        onValueChange = {
+                            sliderPosition = it
+                            onValueChange(amountPerPerson(totalBill, tipAmount, peopleCount))
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
             }
-
-            Row(
-                modifier = Modifier.padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = "Tip")
-                Spacer(modifier = Modifier.width(200.dp))
-                Text(text = "$33.0")
-            }
-
-            Column(
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(text = "$tipPercentage%")
-                Spacer(modifier = Modifier.height(14.dp))
-                Slider(
-                    value = sliderPosition,
-                    onValueChange = { sliderPosition = it },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    onValueChangeFinished = {
-                        // TODO
-                    }
-                )
-            }
-//            }
         }
     }
+}
+
+fun amountPerPerson(totalBill: Double, tipAmount: Double, peopleCount: Int): Double {
+    return ((totalBill + tipAmount) / peopleCount.toDouble() * 100.0)
+        .roundToInt().toDouble() / 100.0
 }
 
 @Preview(showBackground = true)
 @Composable
 fun DefaultPreview() {
     TipCalculatorContainer {
-        TipCalculatorContent(amountPerPerson = 133.0)
+        TipCalculatorContent()
     }
 }
